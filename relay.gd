@@ -18,7 +18,7 @@ var message_queue: Array = []
 
 enum MessageType { EVENT, REQ, CLOSE }
 
-signal on_relay_open()
+signal on_relay_open( relay: NostrRelay )
 signal on_relay_open_error()
 signal on_relay_closed(message: String)
 
@@ -35,7 +35,7 @@ func _init(url: String, port: int = 443, _emit_each_event: bool = false, _eose_r
 	server_port = port
 	emit_each_event = _emit_each_event
 	eose_return_all_events = _eose_return_all_events
-	token = NostrUtils.generate_uuid_v4()
+	refresh_token()
 	# Initialize WebSocketPeer
 	ws = WebSocketPeer.new()
 	self.connect_to_relay()
@@ -59,6 +59,8 @@ func process_message(message: String):
 			if message_array[1] is String and '@' in message_array[1]:
 				key = message_array[1].split('@')[0]
 				token = message_array[1].split('@')[1]
+			
+			print('NostrRelay: process_message(): key -> ', key, ' token: -> ', token)
 
 			match message_array[0]:
 				"EVENT":
@@ -74,8 +76,8 @@ func process_message(message: String):
 						print(message_array[2])
 						
 				"NOTICE":
-					print("NostrRelay: process_message(): NOTICE")
-					emit_signal( "on_relay_notice", get_signal_key("notice", key), message_array[1])
+					print("NostrRelay: process_message(): NOTICE: ", message_array[1])
+					emit_signal( "on_relay_notice", message_array[1])
 				"CLOSED":
 					print("NostrRelay: process_message(): CLOSED")
 					emit_signal( "on_relay_sub_closed", get_signal_key("closed", key), message_array[1])
@@ -88,8 +90,11 @@ func process_message(message: String):
 				"EOSE":
 					print("NostrRelay: process_message(): EOSE")
 					if eose_return_all_events:
-						print("NostrRelay: process_message(): EOSE: return events: ", events[token].size(), ' events')
-						emit_signal( "on_relay_eose_events", get_signal_key("eose_events", key), message_array[1], events[token])	
+						if events.has(token):
+							print("NostrRelay: process_message(): EOSE: return events: ", events[token].size(), ' events')
+							emit_signal( "on_relay_eose_events", get_signal_key("eose_events", key), message_array[1], events[token])	
+						else:
+							print("NostrRelay: process_message(): EOSE: ERROR events[token] does not exist!!!", token, " events keys: ", events.keys())
 					else:
 						print("NostrRelay: process_message(): EOSE: standard result")
 						emit_signal( "on_relay_eose", get_signal_key("eose", key), message_array[1], message_array[2])
@@ -124,8 +129,8 @@ func new_session() -> void:
 	refresh_token()
 
 func refresh_token() -> void:
-	print("NostrRelay: refresh_token() ")
 	token = NostrUtils.generate_uuid_v4()
+	print("NostrRelay: refresh_token():", token)
 	
 func clear_events() -> void:
 	events[token] = null
